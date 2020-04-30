@@ -17,6 +17,7 @@ def get_ing_vector(files):
                 ing.update(recipe["ingredients"])
     return np.asanyarray(list(ing))
 
+
 # parses input JSON file and ingredient vector and turns it into the outputs:
 # x (rows are examples, columns are the 1 hot encoded ingredients)
 # y (rows are examples, columns are 1 hot encoded cusine types)
@@ -63,11 +64,11 @@ def save(x, y, ing, c, ids, name):
 
 # reloads a given data set back into data
 def load(name):
-    return (np.load(name+"-x.npy"),
-            np.load(name+"-y.npy"),
-            np.load(name+"-ingredients.npy"),
-            np.load(name+"-cuisine.npy"),
-            np.load(name+"-ids.npy"))
+    return (np.load(name+"-x.npy", allow_pickle=True),
+            np.load(name+"-y.npy", allow_pickle=True),
+            np.load(name+"-ingredients.npy", allow_pickle=True),
+            np.load(name+"-cuisine.npy", allow_pickle=True),
+            np.load(name+"-ids.npy", allow_pickle=True))
 
 
 # creates the output csv file for Kaggle submissions
