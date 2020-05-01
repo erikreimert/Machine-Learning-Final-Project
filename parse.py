@@ -1,9 +1,17 @@
 import json
 import numpy as np
+from scipy import spatial
+import torch
+import re
 
 """
 Parses input json files into matrices and handles
 creating files suitable for submission onto Kaggle
+"""
+
+
+"""
+The following is the 1 hot encoded version
 """
 
 
@@ -71,20 +79,171 @@ def load(name):
             np.load(name+"-ids.npy", allow_pickle=True))
 
 
+"""
+Utility methods
+"""
+
+
 # creates the output csv file for Kaggle submissions
 def create_output(ids, c, yhat, name):
     out_data = [["id", "cuisine\n"]]
     for i in range(yhat.shape[0]):
-        cur_cuisine = str(c[np.argwhere(yhat[i, :])[0, 0]])
+        cur_cuisine = str(c[np.argmax(yhat[i, :])])
         out_data.append([str(ids[i]), cur_cuisine + "\n"])
     out_data = list(map(lambda a: ",".join(a), out_data))
     with open(name, "w") as f:
         f.writelines(out_data)
 
 
+"""
+These following functions are for the neural network approach for the Kaggle problem
+"""
+
+# download this to use glove code:
+# nlp.stanford.edu/data/glove.6B.zip
+
+
+def get_cuisine(cuisine, embeddings):
+    if cuisine == "southern_us":
+        return embeddings["american"]
+    elif cuisine == "cajun_creole":
+        return embeddings["cajun"]
+    else:
+        # general case, just use the embeddings for the raw word
+        return embeddings[cuisine]
+
+
+# loads all possible cuisine types and their
+# embedding mappings using the training json file
+# and the embedding mappings
+def get_cuisine_mapping(filename, embeddings):
+    with open(filename, "r") as f:
+        data = json.load(f)
+    cuisines = {}
+    for recipe in data:
+        cuisine = recipe["cuisine"]
+        if cuisine not in cuisines:
+            cuisines[cuisine] = get_cuisine(cuisine, embeddings)
+    return cuisines
+
+
+# loads the training/testing data in based on the filename
+# this is for the neural network approach
+# returns a list x containing the training examples encoded
+# using glove, and a tensor y containing the ground truth if applicable
+# returns:
+# x, list of tensors that contain the training example for each recipe
+#    rows are ingredients columns are the glove embedding data
+# y, ground truth tensor if present, rows are each example
+#    columns are the embedding values
+# ids, ids in order specified in x
+def parse_data_tensor(filename, embeddings, cmap):
+    with open(filename, "r") as f:
+        data = json.load(f)
+    ids = []
+    y = None
+    x = []
+    unknown_words = set()
+    special_chars = str.maketrans({
+        "®": "",
+        ",": "",
+        ".": "",
+        ")": "",
+        "(": "",
+        "™": "",
+        "!": "",
+    })
+    for recipe in data:
+        ids.append(recipe["id"])
+        if "cuisine" in recipe:
+            if y is None:
+                y = []
+            y.append(cmap[recipe["cuisine"]])
+        ings = recipe["ingredients"]
+        # sort the ingredient list
+        ings = list(sorted(ings))
+        # turn the ingredient list into a sentence the RNN can understand
+        # separate all the spaces in all the ingredients so they can be looked up seperately
+        # then add the word 'and' in between all the ingredients
+        # TODO: spelling mistakes? Maybe add a library to fix these?
+        recipe_sentence = []
+        for ing in ings:
+            # condition the ingredient list by taking out special characters
+            # converting everything to lower case and splitting on spaces and hyphens
+            for s in re.split(r'[\s-]\s*', ing.translate(special_chars).lower()):
+                recipe_sentence.append(s)
+            recipe_sentence.append("and")
+        # remove the trailing and
+        recipe_sentence = recipe_sentence[:-1]
+        # look up all these words in the embeddings dictionary and build the tensor
+        recipe_vecs = []
+        for word in recipe_sentence:
+            # TODO: make this mispelling checker thing more robust...
+            if word == "mayonaise":
+                word = "mayonnaise"
+            elif word == "passata":
+                recipe_vecs.append(np.asanyarray(embeddings["tomato"]))
+                word = "paste"
+            elif word == "tumeric":
+                word = "turmeric"
+            elif word == "beansprouts":
+                recipe_vecs.append(np.asanyarray(embeddings["bean"]))
+                word = "sprouts"
+            if word not in embeddings:
+                unknown_words.add(word)
+                continue
+            recipe_vecs.append(np.asanyarray(embeddings[word]))
+        x.append(torch.from_numpy(np.vstack(recipe_vecs)))
+    print("Unknown Words:", unknown_words)
+    if y is None:
+        y = torch.tensor([])
+    else:
+        y = torch.from_numpy(np.vstack(y))
+    return x, y, np.asanyarray(ids)
+
+
+def save_data_tensor(name, x, y, ids):
+    torch.save(x, name + "-x.pt")
+    torch.save(y, name + "-y.pt")
+    np.save(name + "-ids.npy", ids, allow_pickle=True)
+
+
+def load_data_tensor(name):
+    return (
+        torch.load(name + "-x.pt"),
+        torch.load(name + "-y.pt"),
+        np.load(name + "-ids.npy")
+    )
+
+
+def load_glove_embeddings(filename):
+    embeddings_dict = {}
+    with open(filename, 'r') as f:
+        for line in f:
+            values = line.split()
+            word = values[0]
+            vector = np.asarray(values[1:], "float32")
+            embeddings_dict[word] = vector
+    return embeddings_dict
+
+
+def find_closest_embeddings(embedding):
+    return sorted(embeddings_dict.keys(), key=lambda word: spatial.distance.euclidean(embeddings_dict[word], embedding))
+
+
+def load_labels(file, cvec):
+    with open(file, "r") as f:
+        data = json.load(f)
+    y = []
+    for recipe in data:
+        y.append((recipe["cuisine"] == cvec).astype(np.int))
+    return np.vstack(y)
+
+
 # use this to test stuff since this won't be run by itself
 if __name__ == "__main__":
     # loads them back in
+    """
     x, y, ing, c, ids = load("train")
     print(c)
     print(y.shape)
@@ -92,3 +251,11 @@ if __name__ == "__main__":
     print(y.sum(axis=0))
     # create output file to test
     create_output(ids, c, y, "out_test.csv")
+    """
+    embeddings_dict = load_glove_embeddings("glove.6B.50d.txt")
+    cmap = get_cuisine_mapping("train.json", embeddings_dict)
+    x, y, ids = parse_data_tensor("train.json", embeddings_dict, cmap)
+    print("X:", len(x), "Y:", y.shape, "ids:", ids.shape)
+    save_data_tensor("train", x, y, ids)
+    x, y, ids = parse_data_tensor("test.json", embeddings_dict, cmap)
+    save_data_tensor("test", x, y, ids)
