@@ -18,16 +18,20 @@ class CuisineRNN(nn.Module):
         self.rnn = nn.RNN(embedding_size, hidden_dim, layer_dim,
                           batch_first=True, nonlinearity='relu')
         # readout layer
-        self.fc = nn.Linear(hidden_dim, 20)
-        self.sm = nn.Softmax(dim=1)
+        self.fc = nn.Linear(hidden_dim, embedding_size)
+        # self.fc = nn.Linear(hidden_dim, 20)
+        # self.sm = nn.Softmax(dim=1)
 
     def forward(self, x):
         out, hn = self.rnn(x)
         # out, input_sizes = nn.utils.rnn.pad_packed_sequence(out, batch_first=True)
         # out = self.fc(out[:, -1, :])
         # return self.sm(out), hn
+        """
         out = self.fc(hn[0, :, :])
         return self.sm(out), hn
+        """
+        return self.fc(hn[-1, :, :]), hn
 
 
 class RecipeDataset(torch.utils.data.IterableDataset):
@@ -74,8 +78,8 @@ def train(x, y, batch_size, epochs, learning_rate, embedding_size, hidden_dim, l
                               collate_fn=collate_recipes,
                               shuffle=False)
     model = CuisineRNN(embedding_size, hidden_dim, layer_dim).cuda()
-    # error = nn.SmoothL1Loss()
-    error = nn.CrossEntropyLoss()
+    error = nn.SmoothL1Loss()
+    # error = nn.CrossEntropyLoss()
     optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
     count = 0
     for epoch in range(epochs):
@@ -97,10 +101,11 @@ def train(x, y, batch_size, epochs, learning_rate, embedding_size, hidden_dim, l
             loss.backward()
             optimizer.step()
             count += 1
-            """
+
             if count % 100 == 0:
                 print("Iteration:", count, "Loss:", loss.item(),
                       "% Accuracy:", calc_accuracy(labels, outputs) * 100)
+
             """
             if count % 100 == 0:
                 corr = np.asanyarray(labels.detach().cpu()) == \
@@ -109,6 +114,7 @@ def train(x, y, batch_size, epochs, learning_rate, embedding_size, hidden_dim, l
                 print(np.argmax(np.asanyarray(outputs.detach().cpu()), axis=1))
                 corr = np.mean(corr) * 100
                 print("Iteration:", count, "Loss:", loss.item(), "%Correct", corr)
+            """
     return model
 
 
@@ -150,12 +156,16 @@ if __name__ == "__main__":
     # set must match
     embeddings = parse.load_glove_embeddings("glove.6B.50d.txt")
     cmap = parse.get_cuisine_mapping("train.json", embeddings)
-    x, _, ids = parse.load_data_tensor("train")
+    x, y, ids = parse.load_data_tensor("train")
+    """
     c = np.asanyarray(list(cmap.keys()))
     y = parse.load_labels("train.json", c)
     y = torch.tensor(np.argmax(y, axis=1))
+    """
 
-    model = train(x, y, 128, 25, 1e-5, 50, 30, 3)
+    model = train(x, y, 128, 25, 1e-2, 50, 30, 3)
+
+    sys.exit(0)
 
     model = model.cpu()
     x_test, _, ids_test = parse.load_data_tensor("test")
