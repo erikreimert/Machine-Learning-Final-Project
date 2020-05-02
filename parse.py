@@ -95,6 +95,16 @@ def create_output(ids, c, yhat, name):
         f.writelines(out_data)
 
 
+# output returned by rnn
+def create_output(ids, yhat, name):
+    out_data = [["id", "cuisine\n"]]
+    for i in range(yhat.shape[0]):
+        out_data.append([str(ids[i]), str(yhat[i][0])+"\n"])
+    out_data = list(map(lambda a: ",".join(a), out_data))
+    with open(name, "w") as f:
+        f.writelines(out_data)
+
+
 """
 These following functions are for the neural network approach for the Kaggle problem
 """
@@ -163,8 +173,7 @@ def parse_data_tensor(filename, embeddings, cmap):
         # sort the ingredient list
         ings = list(sorted(ings))
         # turn the ingredient list into a sentence the RNN can understand
-        # separate all the spaces in all the ingredients so they can be looked up seperately
-        # then add the word 'and' in between all the ingredients
+        # separate all the spaces in all the ingredients so they can be looked up separately
         # TODO: spelling mistakes? Maybe add a library to fix these?
         recipe_sentence = []
         for ing in ings:
@@ -172,9 +181,6 @@ def parse_data_tensor(filename, embeddings, cmap):
             # converting everything to lower case and splitting on spaces and hyphens
             for s in re.split(r'[\s-]\s*', ing.translate(special_chars).lower()):
                 recipe_sentence.append(s)
-            recipe_sentence.append("and")
-        # remove the trailing and
-        recipe_sentence = recipe_sentence[:-1]
         # look up all these words in the embeddings dictionary and build the tensor
         recipe_vecs = []
         for word in recipe_sentence:
