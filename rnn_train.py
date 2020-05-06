@@ -2,7 +2,7 @@ import parse
 import torch
 import torch.nn as nn
 import torch.utils.data
-from torch.utils.data import TensorDataset, DataLoader
+from torch.utils.data import DataLoader
 import numpy as np
 import matplotlib.pyplot as plt
 from ax import optimize
@@ -194,6 +194,7 @@ if __name__ == "__main__":
         ret = evaluate(params, x_train, y_train, x_valid, y_valid)
         return {"validation_loss": ret["validation_loss"]}
 
+    """
     best_parameters, best_values, _, _ = optimize(
         parameters=[
             {"name": "batch_size",
@@ -220,12 +221,25 @@ if __name__ == "__main__":
 
     print("Best parameters:", best_parameters)
     print("Best values:", best_values)
-
-    # Best parameters found on my laptop
     """
+
+    """
+    # Best parameters found on my laptop
     best_parameters = {'batch_size': 372, 'epochs': 183,
                        'learning_rate': 0.0009060921606804382,
                        'hidden_dim': 114, 'layer_dim': 3}
+    """
+
+    # Fine tune hyperparameters for spell check
+    best_parameters = {'batch_size': 372, 'epochs': 183,
+                       'learning_rate': 0.0009060921606804382,
+                       'hidden_dim': 150, 'layer_dim': 4}
+
+    """
+    # found on Google Cloud for 200 embedding
+    best_parameters = {"batch_size": 41, "epochs": 160, # 177,
+                       "learning_rate": 1.45e-6,
+                       "hidden_dim": 138, "layer_dim": 7}
     """
 
     model = evaluate(best_parameters, x_train, y_train, x_valid, y_valid, rec_losses=True)["model"]
@@ -240,6 +254,7 @@ if __name__ == "__main__":
             color="red",
             linewidth=1.0)
     plt.show()
+
 
     print("Running model on test set")
     model = model.cpu()

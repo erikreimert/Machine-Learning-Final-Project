@@ -14,7 +14,7 @@ if __name__ == "__main__":
     rnn_train.cmap = cmap
     parse.embeddings_dict = embeddings
     x, _, _ = parse.parse_data_tensor("input_recipes.json", embeddings, cmap)
-    model = torch.load("trained_model.pt")
+    model = torch.load("trained_model_laptopwithspell.pt")
     output, _ = model(rnn_train.condition_input(x).cuda())
     # Use euclidean distance to known categories
     cat_out = rnn_train.cuisine_from_out(output)
@@ -23,6 +23,6 @@ if __name__ == "__main__":
     # find the closest word in the corpus
     closest_out = []
     for row in output.detach().cpu():
-        closest_out.append(parse.find_closest_embeddings(row)[0])
-    print("Closest available word in the corpus:")
+        closest_out.append(parse.find_closest_embeddings(row)[0:10])
+    print("Closest 10 words in the corpus:")
     print(np.vstack(closest_out))

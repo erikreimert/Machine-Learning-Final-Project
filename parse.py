@@ -3,6 +3,8 @@ import numpy as np
 from scipy import spatial
 import torch
 import re
+from nltk.stem import PorterStemmer
+from autocorrect import Speller
 
 """
 Parses input json files into matrices and handles
@@ -163,6 +165,8 @@ def parse_data_tensor(filename, embeddings, cmap):
         "™": "",
         "!": "",
     })
+    porter = PorterStemmer()
+    check = Speller(lang='en')
     for recipe in data:
         ids.append(recipe["id"])
         if "cuisine" in recipe:
@@ -174,31 +178,22 @@ def parse_data_tensor(filename, embeddings, cmap):
         ings = list(sorted(ings))
         # turn the ingredient list into a sentence the RNN can understand
         # separate all the spaces in all the ingredients so they can be looked up separately
-        # TODO: spelling mistakes? Maybe add a library to fix these?
         recipe_sentence = []
         for ing in ings:
             # condition the ingredient list by taking out special characters
             # converting everything to lower case and splitting on spaces and hyphens
             for s in re.split(r'[\s-]\s*', ing.translate(special_chars).lower()):
-                recipe_sentence.append(s)
+                # spell check the word
+                recipe_sentence.append(check(s))
         # look up all these words in the embeddings dictionary and build the tensor
         recipe_vecs = []
         for word in recipe_sentence:
-            # TODO: make this mispelling checker thing more robust...
-            if word == "mayonaise":
-                word = "mayonnaise"
-            elif word == "passata":
-                recipe_vecs.append(np.asanyarray(embeddings["tomato"]))
-                word = "paste"
-            elif word == "tumeric":
-                word = "turmeric"
-            elif word == "beansprouts":
-                recipe_vecs.append(np.asanyarray(embeddings["bean"]))
-                word = "sprouts"
             if word not in embeddings:
                 unknown_words.add(word)
                 continue
             recipe_vecs.append(np.asanyarray(embeddings[word]))
+        if len(recipe_vecs) == 0:
+            print("No valid words for:", ings)
         x.append(torch.from_numpy(np.vstack(recipe_vecs)))
     print("Unknown Words:", unknown_words)
     if y is None:
