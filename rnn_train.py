@@ -231,7 +231,7 @@ if __name__ == "__main__":
     """
 
     # Fine tune hyperparameters for spell check
-    best_parameters = {'batch_size': 372, 'epochs': 183,
+    best_parameters = {'batch_size': 372, 'epochs': 220,
                        'learning_rate': 0.0009060921606804382,
                        'hidden_dim': 150, 'layer_dim': 4}
 
